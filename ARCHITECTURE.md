@@ -34,6 +34,14 @@ worked (direct browser→IdP calls) than to Neon's own Next.js template, and wit
   backend's own setting name but isn't required by this repo unless a server-side call is added
   later. There is no cookie-secret env var — sessions aren't proxied through a local route, so
   there's no local cookie for this repo to sign.
+- **Session storage — bearer token in `localStorage`, not a cookie**: cross-origin means the
+  session cookie Better Auth would normally set only exists on Neon's own domain, unreachable to
+  this app. `better-auth`'s bearer-plugin pattern is used instead: `signIn.email`'s `onSuccess`
+  captures the `set-auth-token` response header and stores it (`lib/auth/client.ts`); `createAuthClient`'s
+  `fetchOptions.auth` reattaches it to every subsequent `authClient` call. This is what
+  `authClient.useSession()` and `authClient.token()` (below) actually authenticate with — and why
+  there's no `middleware.ts` (see "Page map → data flow"): edge middleware can't read
+  `localStorage`, so route guarding is a client component instead.
 - **Session → backend Bearer token**: sessions themselves aren't JWTs usable against
   `Crypto-Trader-Bot`'s API. `better-auth`'s `jwtClient()` client plugin adds `authClient.token()`,
   which returns `{ token }` — the EdDSA-signed JWT the backend's `NEON_AUTH_BASE_URL`/JWKS
@@ -112,9 +120,12 @@ current role/status after a switch, since a role can change server-side between 
 
 Every arrow above is a direct browser call — to `NEXT_PUBLIC_API_URL` for everything backend
 (CORS-enabled via `API_CORS_ORIGINS`), and to `NEXT_PUBLIC_NEON_AUTH_URL` for auth. This app has no
-server-side proxy layer for either — no Next.js API routes of its own at all. `middleware.ts`
-checks session presence (via `better-auth`'s client) and redirects unauthenticated requests to
-`/login` for every route under `(app)`.
+server-side proxy layer for either — no Next.js API routes of its own at all, and **no
+`middleware.ts`**: the session lives in `localStorage` (the bearer-token pattern, not a cookie —
+see "Auth provider" above), which edge middleware cannot read. Route guarding is a client
+component instead — `app/(app)/layout.tsx` calls `authClient.useSession()` and redirects
+unauthenticated requests to `/login` — with the accepted trade-off of a brief loading-skeleton
+flash before redirect, since nothing can gate the request server-side before JS runs.
 
 ## Where auth tokens live
 

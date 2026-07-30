@@ -32,17 +32,33 @@ backend contract after inspecting the real one.
 
 ## Phase 2 — Auth
 
-- `lib/auth/` — `better-auth/react`'s `createAuthClient({ baseURL: NEXT_PUBLIC_NEON_AUTH_URL,
-  plugins: [jwtClient()] })`, `middleware.ts` guarding `(app)/*`, redirect-to-`/login` on
-  missing/expired session. No local `/api/auth/*` route — see `ARCHITECTURE.md`'s "Auth provider"
+- `lib/auth/client.ts` — `better-auth/react`'s `createAuthClient({ baseURL:
+  NEXT_PUBLIC_NEON_AUTH_URL, plugins: [jwtClient()] })`. Session is a bearer token captured from
+  `signIn.email`'s `set-auth-token` response header and stored in `localStorage` (cross-origin —
+  Better Auth's normal session cookie only exists on Neon's domain), reattached via
+  `fetchOptions.auth`. No local `/api/auth/*` route — see `ARCHITECTURE.md`'s "Auth provider"
   section for why plain `better-auth` is used instead of Neon's own `@neondatabase/auth` package
-  (Next.js 16 peer-dependency conflict with this repo's Next.js 15 pin).
-- `/login` — email/password sign-in form (react-hook-form + zod) via `authClient.signIn.email()`,
-  error states from the auth client itself (not `ApiResult` — this call doesn't go through the
-  backend client).
-- Global 401 handler: one place (a TanStack Query `onError`/query-client default) that attempts
-  one session refresh via `authClient`, then redirects to `/login` on continued failure. No
-  component handles 401 itself, per 4a.
+  (Next.js 16 peer-dependency conflict with this repo's Next.js 15 pin). `getBackendAccessToken()`
+  wraps the separate `jwtClient()`-provided `authClient.token()` — the actual EdDSA JWT
+  `Crypto-Trader-Bot`'s API verifies, distinct from the bearer session token.
+- `/login` (`app/(auth)/login/page.tsx`) — email/password sign-in form (react-hook-form + zod) via
+  `authClient.signIn.email()`, error states from the auth client itself (not `ApiResult` — this
+  call doesn't go through the backend client). Distinct "env var not configured" state when
+  `NEXT_PUBLIC_NEON_AUTH_URL` is unset, per section 3's misconfigured/unreachable distinction.
+- **No `middleware.ts`** — corrected from the original plan once bearer-token-in-`localStorage`
+  turned out to be the actual session mechanism (edge middleware can't read `localStorage`).
+  `app/(app)/layout.tsx` is a client component guard instead: `authClient.useSession()`, redirect
+  to `/login` when signed out, loading skeleton while pending. Accepted trade-off: a brief
+  loading-skeleton flash before redirect, since nothing can gate the request server-side.
+- Global 401 handler: `lib/api/use-authed-query.ts`'s `useAuthedQuery` — fetches a fresh backend
+  JWT per call, retries once on `kind: "unauthorized"` with a re-fetched token, then forces
+  sign-out + a hard redirect to `/login`. No component ever sees an `unauthorized` `ApiResult`, per
+  CLAUDE.md invariant #7. Built now as reusable infrastructure; first real consumer is Phase 3's
+  `/setup` checks.
+- `app/providers.tsx` — `QueryClientProvider`, wraps the root layout.
+- `app/(app)/page.tsx` (moved from `app/page.tsx`) — shows the signed-in user's email and a sign-out
+  button, giving Phase 2 a concrete guarded route to verify the full flow against before Phase 3
+  adds real content.
 
 ## Phase 3 — Tenant resolution + `/setup`
 
