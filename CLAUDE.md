@@ -8,8 +8,10 @@ was originally assumed, and why several pages are deliberately built as disabled
 ## What this is
 
 Next.js 15 (App Router), TypeScript strict. Talks to the backend purely through
-`NEXT_PUBLIC_API_URL` and authenticates directly against a Supabase project — it has zero
-knowledge of how or where the backend itself is hosted. See `docs/repo-topology.md`.
+`NEXT_PUBLIC_API_URL` and authenticates directly against Neon Auth (Managed Better Auth) — it has
+zero knowledge of how or where the backend itself is hosted. See `docs/repo-topology.md` and
+`ARCHITECTURE.md`'s "Auth provider" section (this was Supabase Auth per the original brief, moved
+to Neon Auth before Phase 2's auth code existed, matching the backend's own move to Neon).
 
 ## Commands
 

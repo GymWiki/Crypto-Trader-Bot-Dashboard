@@ -15,7 +15,9 @@ backend contract after inspecting the real one.
 - `create-next-app` (Next.js 15, App Router, TypeScript strict, Tailwind).
 - shadcn/ui init + baseline primitives (button, card, badge, dialog, input, table, tabs, tooltip,
   skeleton).
-- `.env.example` (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+- `.env.example` (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_NEON_AUTH_URL` — corrected from the brief's
+  Supabase vars once the backend moved to Neon Auth, see `ARCHITECTURE.md`'s "Auth provider"
+  section; done before any auth code existed).
 - `CLAUDE.md` for this repo (conventions: file layout, `ApiResult` pattern, four-state component
   rule, no `any` in API types, commit style).
 - `lib/api/client.ts` + `lib/api/types.ts`: the `ApiResult` discriminated union (per
@@ -30,13 +32,17 @@ backend contract after inspecting the real one.
 
 ## Phase 2 — Auth
 
-- `lib/auth/` — Supabase browser client (`@supabase/ssr`), `middleware.ts` guarding `(app)/*`,
-  redirect-to-`/login` on missing/expired session.
-- `/login` — email/password sign-in form (react-hook-form + zod), error states from Supabase
-  itself (not `ApiResult` — this call doesn't go through the backend client).
+- `lib/auth/` — `better-auth/react`'s `createAuthClient({ baseURL: NEXT_PUBLIC_NEON_AUTH_URL,
+  plugins: [jwtClient()] })`, `middleware.ts` guarding `(app)/*`, redirect-to-`/login` on
+  missing/expired session. No local `/api/auth/*` route — see `ARCHITECTURE.md`'s "Auth provider"
+  section for why plain `better-auth` is used instead of Neon's own `@neondatabase/auth` package
+  (Next.js 16 peer-dependency conflict with this repo's Next.js 15 pin).
+- `/login` — email/password sign-in form (react-hook-form + zod) via `authClient.signIn.email()`,
+  error states from the auth client itself (not `ApiResult` — this call doesn't go through the
+  backend client).
 - Global 401 handler: one place (a TanStack Query `onError`/query-client default) that attempts
-  one Supabase token refresh, then redirects to `/login` on continued failure. No component
-  handles 401 itself, per 4a.
+  one session refresh via `authClient`, then redirects to `/login` on continued failure. No
+  component handles 401 itself, per 4a.
 
 ## Phase 3 — Tenant resolution + `/setup`
 
@@ -44,8 +50,8 @@ backend contract after inspecting the real one.
   only when >1 tenant), `localStorage` persistence, cache invalidation on switch.
 - `lib/status/checks.ts` — the generic check registry, driving `/setup`:
   1. Backend reachable — `GET /healthz`.
-  2. Auth configured — Supabase client init + session resolution.
-  3. Backend ↔ Supabase link — `GET /tenants` (see `ARCHITECTURE.md` for why this replaces `/me`).
+  2. Auth configured — Neon Auth client init + session resolution.
+  3. Backend ↔ Neon Auth link — `GET /tenants` (see `ARCHITECTURE.md` for why this replaces `/me`).
   4. Per-tenant exchange credentials — `GET /credentials`.
   5. At least one bot exists — `GET /bots`, informational only.
   6. Circuit breaker / kill switch — gray "not applicable, no backend route yet" (see deviations).

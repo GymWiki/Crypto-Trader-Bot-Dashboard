@@ -2,9 +2,10 @@
 
 This repository has **no knowledge of how or where the backend is hosted, deployed, or run.**
 
-It knows exactly one fact about the backend: `NEXT_PUBLIC_API_URL`. It also knows the Supabase
-project's public URL and anon key, because it authenticates directly against that same Supabase
-project — the backend independently validates the tokens it issues. Everything else about the
+It knows exactly one fact about the backend: `NEXT_PUBLIC_API_URL`. It also knows how to reach
+Neon Auth (`NEON_AUTH_BASE_URL`/`NEXT_PUBLIC_NEON_AUTH_URL`), because it authenticates directly
+against that same Neon Auth project — the backend independently validates the tokens it issues.
+Everything else about the
 backend's state (is it up, is a tenant's exchange credential verified, is a circuit breaker
 tripped) is learned at runtime by calling it and reacting to the response, never assumed.
 
